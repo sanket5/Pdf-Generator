@@ -4,31 +4,79 @@ const fs = require('fs')
 const path = require('path')
 const PDFDocument = require('pdfkit')
 const pdfController = {}
+var PdfTable = require('voilab-pdf-table')
+const orderDbo = require('../models/orders') 
 
-pdfController.generatePdf = (req,res)=>{
-    const doc = new PDFDocument({margin:50})
-    let filename = req.body.filename
-    filename = encodeURIComponent(filename) + '.pdf'
-    res.setHeader('Content-disposition', 'attachment; filename="' + filename + '"')
-    res.setHeader('Content-type', 'application/pdf')
-    const content = req.body.content
-    generateHeader(doc)
-    generateInformation(doc)
-    generateFooter(doc)
+pdfController.generatePdf = (req,res, data)=>{
+  data = data.filter((v,i)=> i <50)
+  console.log(data, 'fifty');
+  const pdf = createBasicPdf(req,res,data)
+  pdf.pipe(res)
 
-    doc.end()
-    doc.pipe(res)
+}
+
+function createBasicPdf(req,res,data){
+  const doc = new PDFDocument(
+    {
+      margin:50,
+      size:'A4',
+      autoFirstPage:true
+    })
+  let filename = req.body.filename
+  let title = req.body.docTitle
+  let description = req.body?.description
+
+  generateHeader(doc)
+
+
+  filename = encodeURIComponent(filename) + '.pdf'
+
+  //Doc title 
+  doc.fontSize(20)
+  doc.text(`${title}`,50,165,{
+    align: 'center'
+  })
+
+  //doc description
+  doc.fontSize(14)
+  doc.moveDown();
+  doc.text(`${description}`,{
+    align: 'justify',
+  })
+
+  createTable(doc, data)
+
+
+  // generateTableHeader(doc,data)
+  // generateTableFeilds(doc,data)
+
+
+
+  //headers for doc
+  res.setHeader('Content-disposition', 'attachment; filename="' + filename + '"')
+  res.setHeader('Content-type', 'application/pdf')
+  
+  doc.end()
+  return doc
 }
 
 function generateHeader(doc) {
-    doc
-      .fillColor("#444444")
-      .fontSize(20)
-      .text("Sarvedyam Foods", 110, 57)
-      .fontSize(10)
-      .text("Wardha", 200, 65, { align: "right" })
-      .text("Wardha", 200, 80, { align: "right" })
-      .moveDown();
+  doc
+    .image('src/assets/images/Sarvedyam_brand_logo_128.png',{
+      width:75
+    })
+    .fontSize(16)
+    .text("Sarvedyam Foods", 150, 80,{
+      align:'left'
+    })
+    .fontSize(10)
+    .text("Sarvedyam Foods address", 150, 80,{
+      align:'right'
+    })
+    .moveTo(0, 130)
+    .lineTo(1000,130)
+    .stroke()
+    .moveTo(0,-100)
   }
   
   function generateFooter(doc) {
@@ -50,34 +98,72 @@ function generateHeader(doc) {
       .moveDown();
   }
 
-//   function generateTableRow(doc) {
-//     doc
-//       .fontSize(10)
-//       .text(c1, 50, y)
-//       .text(c2, 150, y)
-//       .text(c3, 280, y, { width: 90, align: "right" })
-//       .text(c4, 370, y, { width: 90, align: "right" })
-//       .text(c5, 0, y, { align: "right" });
-//   }
+  function generateTableRow(doc, items, y) {
+    let x = 100
+    items.forEach(item=>{
+      doc
+      .fontSize(14)
+      .text(item,x, y,{ align:'left'})
 
-//   function generateInvoiceTable(doc, invoice) {
-//     let i,
-//       invoiceTableTop = 330;
+      x+=100
+    })
+
+  }
+
+  function generateTableHeader(doc,headerList){
+    console.log(headerList[0]);
+    const headers = Object.keys(headerList[0])
+    console.log(headers);
+    generateTableRow(doc, headers, 250)
+  }
+
+  function generateTableFeilds(doc, list){
+    let y = 280
+    list.forEach(item=>{
+      let itemValues = Object.values(item)
+      generateTableRow(doc, itemValues, y)
+      y+= 30
+    })
+
   
-//     for (i = 0; i < invoice.items.length; i++) {
-//       const item = invoice.items[i];
-//       const position = invoiceTableTop + (i + 1) * 30;
-//       generateTableRow(
-//         doc,
-//         position,
-//         item.item,
-//         item.description,
-//         item.amount / item.quantity,
-//         item.quantity,
-//         item.amount
-//       );
-//     }
-//   }
+  
+  }
+
+  function createTable(doc, data){
+    const headers = Object.keys(data[0])
+    let headerList=[]
+    headers.forEach((item, index)=>{
+      let order = new orderDbo.tableHeader(item,item,120)
+      headerList.push(order)
+    })
+
+    console.log(headerList);
+
+    doc.moveTo(0,0)
+    table = new PdfTable(doc,{
+    });
+    table
+      .addPlugin(new (require('voilab-pdf-table/plugins/fitcolumn'))({
+          column: 'description'
+      }))
+      // set defaults to your columns
+      .setColumnsDefaults({
+          headerBorder: 'B',
+      })
+      // add table columns
+      .addColumns(headerList)
+
+      .onPageAdded(function (tb) {
+        tb.addHeader();
+      });
+
+      doc.addPage();
+
+      table.addBody(data);
+  }
+
+
+
 
 module.exports = pdfController
 
