@@ -10,6 +10,6 @@ app.use('/', pdfRoute)
 
 
 
-app.listen(3000, ()=>{
-    console.log('Server listning on 3000');
+app.listen( process.env.PORT || 3000, ()=>{
+    console.log('Server listning on'+ process.env.PORT || 3000);
 })
